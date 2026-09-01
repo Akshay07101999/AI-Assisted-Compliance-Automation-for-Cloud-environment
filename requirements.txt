@@ -1,0 +1,15 @@
+# ComplianceGuard — Python dependencies
+# Install with: pip install -r requirements.txt
+# Tested on Python 3.9+
+
+# AWS SDK
+boto3>=1.28.0
+botocore>=1.31.0
+
+# Web dashboard
+Flask>=3.0.0
+flask-cors>=4.0.0
+
+# Testing
+pytest>=7.0.0
+pytest-mock>=3.10.0

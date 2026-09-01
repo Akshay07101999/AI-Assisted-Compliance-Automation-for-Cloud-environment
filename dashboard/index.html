@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ComplianceGuard Orchestrator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <aside class="sidebar">
+        <div class="brand">
+            <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            </svg>
+            <h2>ComplianceGuard</h2>
+        </div>
+        <nav class="nav-menu">
+            <a href="#" class="nav-item active" onclick="switchView('dashboard', this); return false;">Dashboard</a>
+            <a href="#" class="nav-item" onclick="switchView('exceptions', this); return false;">🛡️ Exceptions</a>
+            <a href="#" class="nav-item" onclick="switchView('history', this); return false;">Scan History</a>
+            <a href="#" class="nav-item" onclick="switchView('policies', this); return false;">Policies</a>
+            <a href="#" class="nav-item" onclick="switchView('settings', this); return false;">Settings</a>
+        </nav>
+        <div class="sidebar-footer">
+            <p>Capstone 2.0</p>
+            <p class="status">System Online</p>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <!-- ── VIEW 1: DASHBOARD ───────────────────────────────────────────── -->
+        <div id="view-dashboard" class="page-view active">
+            <header class="topbar">
+                <div>
+                    <h1 class="page-title">Remediation Triage</h1>
+                    <p class="subtitle">AI-Driven Risk Pipeline &nbsp;·&nbsp; Last Scan: <span id="lastScanTime">--</span></p>
+                </div>
+                <div class="actions">
+                    <button class="btn btn-secondary" onclick="fetchReport()">Refresh Data</button>
+                    <button class="btn btn-primary" id="scanBtn" onclick="triggerScan()">Run Scan</button>
+                </div>
+            </header>
+
+            <section class="overview-grid">
+                <div class="stat-card">
+                    <div class="stat-title">Current Findings</div>
+                    <div class="stat-value" id="totalFindings">--</div>
+                    <div id="totalFindingsHistory" style="display:none; font-size:0.72rem; color:var(--text-secondary); margin-top:2px;"></div>
+                </div>
+                <div class="stat-card highlight-critical">
+                    <div class="stat-title">🚨 INVESTIGATE (Gate Blocked)</div>
+                    <div class="stat-value" id="investigateCount">--</div>
+                </div>
+                <div class="stat-card highlight-high">
+                    <div class="stat-title">⚡ QUICK APPROVE (Gate Safe)</div>
+                    <div class="stat-value" id="approveCount">--</div>
+                </div>
+                <div class="stat-card highlight-auto">
+                    <div class="stat-title">🤖 AUTO-REMEDIATED</div>
+                    <div class="stat-value" id="autoCount">--</div>
+                </div>
+            </section>
+
+            <section class="findings-columns">
+                <!-- Manual Review Drawer -->
+                <div class="triage-column" id="adminReviewQueue">
+                    <h3 class="section-title">Requires Approval / Investigation</h3>
+                    <div class="ticket-list" id="manualReviewList">
+                        <!-- Cards will be populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Auto-Remediated Feed -->
+                <div class="triage-column" id="autoRemediatedQueue">
+                    <h3 class="section-title">Auto-Remediated Feed</h3>
+                    <div class="ticket-list" id="autoReviewList">
+                        <!-- Cards will be populated by JS -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- 2D Routing Matrix Table -->
+            <section class="matrix-section" style="margin-top: 32px;">
+                <h3 class="section-title">2D Routing Matrix Overview</h3>
+                <div class="matrix-wrapper">
+                    <table class="routing-matrix">
+                        <thead>
+                            <tr>
+                                <th>Risk Score Band</th>
+                                <th>Gate: PROCEED (Safe)</th>
+                                <th>Gate: BLOCK (Hazard)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="band-label">LOW (0-25%)</td>
+                                <td class="action-cell success"><span class="icon">✅</span> AUTO</td>
+                                <td class="action-cell warning"><span class="icon">⚠️</span> ADMIN (Investigate)</td>
+                            </tr>
+                            <tr>
+                                <td class="band-label">MEDIUM (26-50%)</td>
+                                <td class="action-cell success"><span class="icon">✅</span> AUTO</td>
+                                <td class="action-cell warning"><span class="icon">⚠️</span> ADMIN (Investigate)</td>
+                            </tr>
+                            <tr>
+                                <td class="band-label">HIGH (51-75%)</td>
+                                <td class="action-cell info"><span class="icon">⚡</span> ADMIN (Quick Approve)</td>
+                                <td class="action-cell danger"><span class="icon">🔴</span> ADMIN (Investigate)</td>
+                            </tr>
+                            <tr>
+                                <td class="band-label">CRITICAL (76-100%)</td>
+                                <td class="action-cell info"><span class="icon">⚡</span> ADMIN (Quick Approve)</td>
+                                <td class="action-cell danger-extreme"><span class="icon">🚨</span> ADMIN (Investigate)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+
+        <!-- ── VIEW 2: SCAN HISTORY ────────────────────────────────────────── -->
+        <div id="view-history" class="page-view" style="display:none;">
+            <header class="topbar">
+                <div>
+                    <h1 class="page-title">Scan &amp; Audit History</h1>
+                    <p class="subtitle">Immutable record of all cloud compliance scans and autonomous remediation decisions</p>
+                </div>
+                <div class="actions">
+                    <button class="btn btn-secondary" onclick="loadHistoryView()">Refresh Log</button>
+                </div>
+            </header>
+
+            <div class="matrix-wrapper" style="margin-top: 16px;">
+                <div style="padding: 16px 20px; border-bottom: 1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <span style="font-size:0.85rem; color:var(--text-secondary); font-weight:600; text-transform:uppercase;">Filter:</span>
+                        <select id="historyFilter" onchange="renderHistoryTable()" style="background:var(--bg-panel-hover); color:#fff; border:1px solid var(--border-color); padding:6px 12px; border-radius:6px; font-size:0.85rem; cursor:pointer;">
+                            <option value="ALL">All Entries</option>
+                            <option value="AUTO_REMEDIATION_SUCCESS">Auto-Remediated</option>
+                            <option value="LLM_ESCALATION">Escalated to Human/LLM</option>
+                            <option value="BLOCKED">Safety Gate Blocked</option>
+                        </select>
+                    </div>
+                    <span style="font-size:0.8rem; color:var(--text-secondary);" id="historyCount">Showing 0 entries</span>
+                </div>
+                <table class="routing-matrix" id="historyTable">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Control ID</th>
+                            <th>Resource ID</th>
+                            <th>Service</th>
+                            <th>Risk Score</th>
+                            <th>Action Taken</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyTableBody">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+                <!-- ── VIEW: EXCEPTIONS GOVERNANCE ───────────────────────────────── -->
+        <div id="view-exceptions" class="page-view" style="display:none;">
+            <header class="topbar">
+                <div>
+                    <h1 class="page-title">Compliance Waivers &amp; Exception Registry</h1>
+                    <p class="subtitle">Time-bound governance waivers formally excluding specific cloud resources from controls</p>
+                </div>
+                <div class="actions">
+                    <button class="btn btn-secondary" onclick="loadExceptionsView()">Refresh</button>
+                    <button class="btn btn-primary" onclick="openGrantExceptionModal()">+ Grant Exception</button>
+                </div>
+            </header>
+
+            <section class="overview-grid" style="margin-top:20px;">
+                <div class="stat-card">
+                    <div class="stat-title">Total Exemptions</div>
+                    <div class="stat-value" id="totalExceptionsCount">0</div>
+                </div>
+                <div class="stat-card highlight-auto">
+                    <div class="stat-title">🟢 Active Waivers</div>
+                    <div class="stat-value" id="activeExceptionsCount">0</div>
+                </div>
+                <div class="stat-card highlight-high">
+                    <div class="stat-title">⏳ Expired (Unsuppressed)</div>
+                    <div class="stat-value" id="expiredExceptionsCount">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title">🚫 Revoked Waivers</div>
+                    <div class="stat-value" id="revokedExceptionsCount">0</div>
+                </div>
+            </section>
+
+            <div class="matrix-wrapper" style="margin-top: 20px;">
+                <div style="padding: 16px 20px; border-bottom: 1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+                    <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+                        <span style="font-size:0.85rem; color:var(--text-secondary); font-weight:600; text-transform:uppercase;">Filter:</span>
+                        <select id="exceptionStatusFilter" onchange="renderExceptionsTable()" style="background:var(--bg-panel-hover); color:#fff; border:1px solid var(--border-color); padding:6px 12px; border-radius:6px; font-size:0.85rem; cursor:pointer;">
+                            <option value="ALL">All Statuses</option>
+                            <option value="active">Active Only</option>
+                            <option value="expired">Expired Only</option>
+                            <option value="revoked">Revoked Only</option>
+                        </select>
+                        <input type="text" id="exceptionSearchInput" placeholder="Search by Resource ID, Control, Justification..." oninput="renderExceptionsTable()" style="background:var(--bg-panel-hover); color:#fff; border:1px solid var(--border-color); padding:6px 14px; border-radius:6px; font-size:0.85rem; min-width:260px;">
+                    </div>
+                    <span style="font-size:0.8rem; color:var(--text-secondary);" id="exceptionCountLabel">Showing 0 waivers</span>
+                </div>
+                <table class="routing-matrix" id="exceptionsTable">
+                    <thead>
+                        <tr>
+                            <th>Exception ID</th>
+                            <th>Resource &amp; Control</th>
+                            <th>Justification &amp; Owner</th>
+                            <th>Approved By</th>
+                            <th>Expiry Date</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="exceptionsTableBody">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ── VIEW 3: POLICIES OVERHAUL ────────────────────────────────── -->
+        <div id="view-policies" class="page-view" style="display:none;">
+            <header class="topbar">
+                <div>
+                    <h1 class="page-title">Policy Governance &amp; Safety Gate Matrix</h1>
+                    <p class="subtitle">CIS AWS Foundations Benchmark v1.4 &amp; Zero-Trust Contextual Guardrails</p>
+                </div>
+            </header>
+
+            <!-- Governance Overview Metric Banner -->
+            <div class="gov-metrics-bar">
+                <div class="gov-metric-item">
+                    <span class="gov-metric-value">6</span>
+                    <span class="gov-metric-label">Enforced Controls</span>
+                </div>
+                <div class="gov-metric-divider"></div>
+                <div class="gov-metric-item">
+                    <span class="gov-metric-value" style="color:var(--low);">67%</span>
+                    <span class="gov-metric-label">Auto-Fix Coverage</span>
+                </div>
+                <div class="gov-metric-divider"></div>
+                <div class="gov-metric-item">
+                    <span class="gov-metric-value" style="color:var(--critical);">Zero-Downtime</span>
+                    <span class="gov-metric-label">Safety Gate Guard</span>
+                </div>
+                <div class="gov-metric-divider"></div>
+                <div class="gov-metric-item">
+                    <span class="gov-metric-value" style="color:var(--accent-primary);">CIS v1.4</span>
+                    <span class="gov-metric-label">Compliance Baseline</span>
+                </div>
+            </div>
+
+            <!-- Controls Toolbar: Category Tabs & Search/Filters -->
+            <div class="gov-controls-toolbar">
+                <div class="category-tabs" id="policyCategoryTabs">
+                    <button class="cat-tab active" data-category="ALL" onclick="filterPolicies('ALL')">All Categories <span class="tab-count">6</span></button>
+                    <button class="cat-tab" data-category="S3" onclick="filterPolicies('S3')">🪣 S3 Storage <span class="tab-count">2</span></button>
+                    <button class="cat-tab" data-category="SG" onclick="filterPolicies('SG')">🛡️ Security Groups <span class="tab-count">2</span></button>
+                    <button class="cat-tab" data-category="EC2" onclick="filterPolicies('EC2')">💻 EC2 Compute <span class="tab-count">1</span></button>
+                    <button class="cat-tab" data-category="RDS" onclick="filterPolicies('RDS')">🗄️ RDS Database <span class="tab-count">1</span></button>
+                    <button class="cat-tab" data-category="EBS" onclick="filterPolicies('EBS')">💾 EBS Volumes <span class="tab-count">1</span></button>
+                    <button class="cat-tab" data-category="IAM" onclick="filterPolicies('IAM')">🔑 IAM Keys <span class="tab-count">1</span></button>
+                </div>
+
+                <div class="gov-filter-group">
+                    <div class="search-box">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                        <input type="text" id="policySearchInput" placeholder="Search rules, CIS IDs, parameters..." oninput="searchPolicies()">
+                    </div>
+                    <select id="policyActionFilter" class="gov-select" onchange="searchPolicies()">
+                        <option value="ALL">All Gate Outcomes</option>
+                        <option value="BLOCK">Has BLOCK Conditions</option>
+                        <option value="PROCEED">Has PROCEED Conditions</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Rule Cards Container -->
+            <div class="policy-matrix-container" id="policyMatrixList">
+
+                <!-- Rule 1: S3 BPA -->
+                <div class="matrix-card critical" data-category="S3" data-rule-id="CIS-2.1.4" data-actions="BLOCK PROCEED">
+                    <div class="matrix-card-header">
+                        <div class="rule-title-group">
+                            <span class="service-pill s3">S3</span>
+                            <span class="rule-id">CIS-2.1.4</span>
+                            <span class="framework-tag">CIS AWS Benchmark v1.4</span>
+                        </div>
+                        <div class="rule-meta-group">
+                            <span class="badge critical">Critical Severity</span>
+                        </div>
+                    </div>
+
+                    <div class="matrix-card-body">
+                        <h2 class="rule-name">S3 Block Public Access (Account &amp; Bucket Level)</h2>
+                        <p class="rule-desc">Ensures all four S3 Block Public Access settings are strictly enabled on buckets to prevent unauthorized data exposure via policy drift.</p>
+                        
+                        <!-- Visual Pipeline Decision Graph -->
+                        <div class="pipeline-graph">
+                            <div class="graph-title"><span class="pulse-dot green"></span> Safety Gate Logic Pipeline</div>
+                            <div class="graph-nodes-container">
+                                <div class="node-step">
+                                    <div class="node-box scan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg> Finding Evaluated</div>
+                                </div>
+                                <div class="node-arrow">➔</div>
+                                <div class="node-step">
+                                    <div class="node-box context"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="4"></rect><line x1="8" y1="12" x2="16" y2="12"></line></svg> Check Context Keys</div>
+                                </div>
+                                <div class="node-arrow">➔</div>
+                                <div class="node-branches">
+                                    <div class="branch-item block">
+                                        <div class="branch-badge block">BLOCK (Escalate)</div>
+                                        <div class="branch-cond">Website Hosting Enabled</div>
+                                        <div class="branch-reason">Auto-fix would immediately break live static website endpoint.</div>
+                                    </div>
+                                    <div class="branch-item proceed">
+                                        <div class="branch-badge proceed">PROCEED (Auto-Fix)</div>
+                                        <div class="branch-cond">CloudFront OAC Active</div>
+                                        <div class="branch-reason">Intentional private endpoint with CDN origin access. Safe to enforce BPA.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <details class="code-drawer">
+                            <summary class="drawer-trigger">⚙️ View Boto3 Remediation API &amp; Context Signature</summary>
+                            <div class="drawer-code">
+<pre><code># Remediation Boto3 Call
+s3_client.put_public_access_block(
+    Bucket=resource_id,
+    PublicAccessBlockConfiguration={
+        'BlockPublicAcls': True, 'IgnorePublicAcls': True,
+        'BlockPublicPolicy': True, 'RestrictPublicBuckets': True
+    }
+)
+# Evaluated Context Keys: context['website_hosting_enabled'], context['cloudfront_oac_enabled']</code></pre>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+
+                <!-- Rule 2: S3 Encryption -->
+                <div class="matrix-card high" data-category="S3" data-rule-id="CIS-2.1.1" data-actions="PROCEED">
+                    <div class="matrix-card-header">
+                        <div class="rule-title-group">
+                            <span class="service-pill s3">S3</span>
+                            <span class="rule-id">CIS-2.1.1</span>
+                            <span class="framework-tag">CIS AWS Benchmark v1.4</span>
+                        </div>
+                        <div class="rule-meta-group">
+                            <span class="badge high">High Severity</span>
+                        </div>
+                    </div>
+
+                    <div class="matrix-card-body">
+                        <h2 class="rule-name">S3 Default Bucket Encryption</h2>
+                        <p class="rule-desc">Requires default server-side encryption (SSE-AES256 or SSE-KMS) on all buckets for mandatory data-at-rest protection.</p>
+                        
+                        <div class="pipeline-graph">
+                            <div class="graph-title"><span class="pulse-dot green"></span> Safety Gate Logic Pipeline</div>
+                            <div class="graph-nodes-container">
+                                <div class="node-step">
+                                    <div class="node-box scan">Finding Evaluated</div>
+                                </div>
+                                <div class="node-arrow">➔</div>
+                                <div class="node-step">
+                                    <div class="node-box context">Check Context Keys</div>
+                                </div>
+                                <div class="node-arrow">➔</div>
+                                <div class="node-branches">
+                                    <div class="branch-item proceed">
+                                        <div class="branch-badge proceed">PROCEED (Auto-Fix)</div>
+                                        <div class="branch-cond">Default Configuration Check</div>
+                                        <div class="branch-reason">Enables default SSE. Safe for new objects; zero downtime risk to existing reads/writes.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <details class="code-drawer">
+                            <summary class="drawer-trigger">⚙️ View Boto3 Remediation API &amp; Context Signature</summary>
+                            <div class="drawer-code">
+<pre><code>s3_client.put_bucket_encryption(
+    Bucket=resource_id,
+    ServerSideEncryptionConfiguration={
+        'Rules': [{'ApplyServerSideEncryptionByDefault': {'SSEAlgorithm': 'AES256'}}]
+    }
+)</code></pre>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+
+                <!-- Rule 3: Admin Ports SG -->
+                <div class="matrix-card critical" data-category="SG" data-rule-id="CIS-5.2" data-actions="BLOCK PROCEED">
+                    <div class="matrix-card-header">
+                        <div class="rule-title-group">
+                            <span class="service-pill sg">Security Group</span>
+                            <span class="rule-id">CIS-5.2</span>
+                            <span class="framework-tag">CIS AWS Benchmark v1.4</span>
+                        </div>
+                        <div class="rule-meta-group">
+                            <span class="badge critical">Critical Severity</span>
+                        </div>
+                    </div>
+
+                    <div class="matrix-card-body">
+                        <h2 class="rule-name">Restrict Remote Admin Access (SSH Port 22 / RDP Port 3389)</h2>
+                        <p class="rule-desc">Prohibits unrestricted ingress rules (0.0.0.0/0) on administrative ports across all VPC Security Groups.</p>
+                        
+                        <div class="pipeline-graph">
+                            <div class="graph-title"><span class="pulse-dot green"></span> Safety Gate Logic Pipeline</div>
+                            <div class="graph-nodes-container">
+                                <div class="node-step">
+                                    <div class="node-box scan">Finding Evaluated</div>
+                                </div>
+                                <div class="node-arrow">➔</div>
+                                <div class="node-step">
+                                    <div class="node-box context">Subnet &amp; Instance Topology</div>
+                                </div>
+                                <div class="node-arrow">➔</div>
+                                <div class="node-branches">
+                                    <div class="branch-item block">
+                                        <div class="branch-badge block">BLOCK (Escalate)</div>
+                                        <div class="branch-cond">Attached Instance + Live Public IP</div>
+                                        <div class="branch-reason">Lockout risk! Deleting rule severs live SSH. Human must supply specific replacement CIDR.</div>
+                                    </div>
+                                    <div class="branch-item block">
+                                        <div class="branch-badge block">BLOCK (Escalate)</div>
+                                        <div class="branch-cond">Broad Private Subnet Range (10.x.x.x)</div>
+                                        <div class="branch-reason">Lockout risk! Attached to active instance. Architect must restrict to Bastion /32.</div>
+                                    </div>
+                                    <div class="branch-item proceed">
+                                        <div class="branch-badge proceed">PROCEED (Auto-Fix)</div>
+                                        <div class="branch-cond">Dangling SG (0 Attached Instances)</div>
+                                        <div class="branch-reason">Zero lockout risk! Safe to revoke broad ingress rule outright via boto3.</div>
+                                    </div>
+                                    <div class="branch-item proceed">
+                                        <div class="branch-badge proceed">PROCEED (Auto-Fix)</div>
+                                        <div class="branch-cond">Private Subnet / No Public IP</div>
+                                        <div class="branch-reason">0.0.0.0/0 is physically internet-unreachable. Safe to auto-replace with VPC CIDR.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <details class="code-drawer">
+                            <summary class="drawer-trigger">⚙️ View Boto3 Remediation API &amp; Context Signature</summary>
+                            <div class="drawer-code">
+<pre><code>ec2_client.revoke_security_group_ingress(
+    GroupId=group_id,
+    IpPermissions=[{
+        'IpProtocol': 'tcp', 'FromPort': port, 'ToPort': port,
+        'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
+    }]
+)
+# Surgical Replacement with VPC CIDR:
+ec2_client.authorize_security_group_ingress(GroupId=group_id, IpPermissions=[...])</code></pre>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+
+                <!-- Rule 4: DB Ports SG -->
+                <div class="matrix-card critical" data-category="SG" data-rule-id="Org-SG-DB" data-actions="BLOCK PROCEED">
+                    <div class="matrix-card-header">
+                        <div class="rule-title-group">
+                            <span class="service-pill sg">Security Group</span>
+                            <span class="rule-id">Org-SG-DB</span>
+                            <span class="framework-tag">Custom Governance Rule</span>
+                        </div>
+                        <div class="rule-meta-group">
+                            <span class="badge critical">Critical Severity</span>
+                        </div>
+                    </div>
+
+                    <div class="matrix-card-body">
+                        <h2 class="rule-name">Restrict Unrestricted Database Port Ingress</h2>
+                        <p class="rule-desc">Prevents global 0.0.0.0/0 exposure to MySQL (3306), PostgreSQL (5432), MongoDB (27017), and Redis (6379).</p>
+                        
+                        <div class="pipeline-graph">
+                            <div class="graph-title"><span class="pulse-dot green"></span> Safety Gate Logic Pipeline</div>
+                            <div class="graph-nodes-container">
+                                <div class="node-step">
+                                    <div class="node-box scan">Finding Evaluated</div>
+                                </div>
+                                <div class="node-arrow">➔</div>
+                                <div class="node-step">
+                                    <div class="node-box context">Attachment Context</div>
+                                </div>
+                                <div class="node-arrow">➔</div>
+                                <div class="node-branches">
+                                    <div class="branch-item block">
+                                        <div class="branch-badge block">BLOCK (Escalate)</div>
+                                        <div class="branch-cond">SG Attached to Running Instance</div>
+                                        <div class="branch-reason">Database outage risk! Revoking breaks app connection without verified app source CIDR.</div>
+                                    </div>
+                                    <div class="branch-item proceed">
+                                        <div class="branch-badge proceed">PROCEED (Auto-Fix)</div>
+                                        <div class="branch-cond">Dangling DB Rule (Unattached)</div>
+                                        <div class="branch-reason">Unused security group rule. Safe to auto-revoke with zero impact.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <details class="code-drawer">
+                            <summary class="drawer-trigger">⚙️ View Boto3 Remediation API &amp; Context Signature</summary>
+                            <div class="drawer-code">
+<pre><code>ec2_client.revoke_security_group_ingress(
+    GroupId=group_id, IpPermissions=[{'IpProtocol': 'tcp', 'FromPort': db_port, 'ToPort': db_port, 'IpRanges': [{'CidrIp': '0.0.0.0/0'}]}]
+)</code></pre>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+
+                <!-- Rule 5: EC2 Public IP -->
+                <div class="matrix-card medium" data-category="EC2" data-rule-id="Org-5" data-actions="BLOCK PROCEED">
+                    <div class="matrix-card-header">
+                        <div class="rule-title-group">
+                            <span class="service-pill ec2">EC2</span>
+                            <span class="rule-id">Org-5</span>
+                            <span class="framework-tag">Custom Governance Rule</span>
+                        </div>
+                        <div class="rule-meta-group">
+                            <span class="badge medium">Medium Severity</span>
+                        </div>
+                    </div>
+
+                    <div class="matrix-card-body">
+                        <h2 class="rule-name">EC2 Direct Public IP Disassociation</h2>
+                        <p class="rule-desc">Flags EC2 instances running with direct public IP addresses unshielded by Application Load Balancers (ALB/NLB).</p>
+                        
+                        <div class="pipeline-graph">
+                            <div class="graph-title"><span class="pulse-dot green"></span> Safety Gate Logic Pipeline</div>
+                            <div class="graph-nodes-container">
+                                <div class="node-step">
+                                    <div class="node-box scan">Finding Evaluated</div>
+                                </div>
+                                <div class="node-arrow">➔</div>
+                                <div class="node-step">
+                                    <div class="node-box context">Subnet Route &amp; Tags</div>
+                                </div>
+                                <div class="node-arrow">➔</div>
+                                <div class="node-branches">
+                                    <div class="branch-item block">
+                                        <div class="branch-badge block">BLOCK (Escalate)</div>
+                                        <div class="branch-cond">Bastion Jump Host Tag</div>
+                                        <div class="branch-reason">Direct public IP is intentional by architecture design for jump box connectivity.</div>
+                                    </div>
+                                    <div class="branch-item block">
+                                        <div class="branch-badge block">BLOCK (Escalate)</div>
+                                        <div class="branch-cond">Running Production Public Subnet</div>
+                                        <div class="branch-reason">Outage risk! Stripping public IP severs active incoming web traffic immediately.</div>
+                                    </div>
+                                    <div class="branch-item proceed">
+                                        <div class="branch-badge proceed">PROCEED (Auto-Fix)</div>
+                                        <div class="branch-cond">Private Subnet (No IGW Route)</div>
+                                        <div class="branch-reason">Public IP is internet-unreachable. Safe to disassociate without network disruption.</div>
+                                    </div>
+                                    <div class="branch-item proceed">
+                                        <div class="branch-badge proceed">PROCEED (Auto-Fix)</div>
+                                        <div class="branch-cond">Stopped / Terminated Prod Instance</div>
+                                        <div class="branch-reason">No active inbound traffic. Safe to disassociate public IP.</div>
+                                    </div>
+                                    <div class="branch-item proceed">
+                                        <div class="branch-badge proceed">PROCEED (Auto-Fix)</div>
+                                        <div class="branch-cond">Non-Production Environment</div>
+                                        <div class="branch-reason">Low blast radius. Proceeding autonomously and logging audit record.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <details class="code-drawer">
+                            <summary class="drawer-trigger">⚙️ View Boto3 Remediation API &amp; Context Signature</summary>
+                            <div class="drawer-code">
+<pre><code>ec2_client.disassociate_address(AssociationId=assoc_id)</code></pre>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+
+                <!-- Rule 6: RDS Storage Encryption -->
+                <div class="matrix-card high" data-category="RDS" data-rule-id="CIS-2.3.1" data-actions="BLOCK">
+                    <div class="matrix-card-header">
+                        <div class="rule-title-group">
+                            <span class="service-pill rds">RDS</span>
+                            <span class="rule-id">CIS-2.3.1</span>
+                            <span class="framework-tag">CIS AWS Benchmark v1.4</span>
+                        </div>
+                        <div class="rule-meta-group">
+                            <span class="badge high">High Severity</span>
+                        </div>
+                    </div>
+
+                    <div class="matrix-card-body">
+                        <h2 class="rule-name">RDS Storage KMS Encryption at Rest</h2>
+                        <p class="rule-desc">Requires all RDS database clusters and DB instances to have storage encryption enabled with KMS.</p>
+                        
+                        <div class="pipeline-graph">
+                            <div class="graph-title"><span class="pulse-dot green"></span> Safety Gate Logic Pipeline</div>
+                            <div class="graph-nodes-container">
+                                <div class="node-step">
+                                    <div class="node-box scan">Finding Evaluated</div>
+                                </div>
+                                <div class="node-arrow">➔</div>
+                                <div class="node-step">
+                                    <div class="node-box context">DB Cluster State</div>
+                                </div>
+                                <div class="node-arrow">➔</div>
+                                <div class="node-branches">
+                                    <div class="branch-item block">
+                                        <div class="branch-badge block">BLOCK (Escalate)</div>
+                                        <div class="branch-cond">AWS Architectural Limit</div>
+                                        <div class="branch-reason">RDS encryption CANNOT be enabled in-place on existing unencrypted DBs. Requires snapshot-copy-restore downtime workflow.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <details class="code-drawer">
+                            <summary class="drawer-trigger">⚙️ View Boto3 Remediation API &amp; Context Signature</summary>
+                            <div class="drawer-code">
+<pre><code># Escalation Workflow Triggered:
+# 1. Create DB Snapshot: rds.create_db_snapshot()
+# 2. Copy & Encrypt: rds.copy_db_snapshot(KmsKeyId=...)
+# 3. Restore: rds.restore_db_instance_from_db_snapshot()</code></pre>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+
+                <!-- Rule 7: EBS Volume Encryption -->
+                <div class="matrix-card high" data-category="EBS" data-rule-id="CIS-2.2.1" data-actions="BLOCK">
+                    <div class="matrix-card-header">
+                        <div class="rule-title-group">
+                            <span class="service-pill ebs">EBS</span>
+                            <span class="rule-id">CIS-2.2.1</span>
+                            <span class="framework-tag">CIS AWS Benchmark v1.4</span>
+                        </div>
+                        <div class="rule-meta-group">
+                            <span class="badge high">High Severity</span>
+                        </div>
+                    </div>
+
+                    <div class="matrix-card-body">
+                        <h2 class="rule-name">EBS Storage Encryption at Rest</h2>
+                        <p class="rule-desc">Ensures attached Elastic Block Store (EBS) volumes are encrypted at rest with AWS KMS.</p>
+                        
+                        <div class="pipeline-graph">
+                            <div class="graph-title"><span class="pulse-dot green"></span> Safety Gate Logic Pipeline</div>
+                            <div class="graph-nodes-container">
+                                <div class="node-step">
+                                    <div class="node-box scan">Finding Evaluated</div>
+                                </div>
+                                <div class="node-arrow">➔</div>
+                                <div class="node-step">
+                                    <div class="node-box context">Volume Attachment State</div>
+                                </div>
+                                <div class="node-arrow">➔</div>
+                                <div class="node-branches">
+                                    <div class="branch-item block">
+                                        <div class="branch-badge block">BLOCK (Escalate)</div>
+                                        <div class="branch-cond">In-place Encryption Unsupported</div>
+                                        <div class="branch-reason">AWS EBS does not support converting unencrypted volumes live. Requires snapshot &amp; volume swap.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <details class="code-drawer">
+                            <summary class="drawer-trigger">⚙️ View Boto3 Remediation API &amp; Context Signature</summary>
+                            <div class="drawer-code">
+<pre><code># Escalation Workflow Triggered:
+# ec2.create_snapshot() -> ec2.copy_snapshot(Encrypted=True) -> ec2.create_volume()</code></pre>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+
+                <!-- Rule 8: IAM Key Rotation -->
+                <div class="matrix-card high" data-category="IAM" data-rule-id="CIS-1.14" data-actions="BLOCK PROCEED">
+                    <div class="matrix-card-header">
+                        <div class="rule-title-group">
+                            <span class="service-pill iam">IAM</span>
+                            <span class="rule-id">CIS-1.14</span>
+                            <span class="framework-tag">CIS AWS Benchmark v1.4</span>
+                        </div>
+                        <div class="rule-meta-group">
+                            <span class="badge high">High Severity</span>
+                        </div>
+                    </div>
+
+                    <div class="matrix-card-body">
+                        <h2 class="rule-name">IAM Access Keys 90-Day Rotation</h2>
+                        <p class="rule-desc">Deactivates active programmatic access keys older than 90 days to prevent credential leak misuse.</p>
+                        
+                        <div class="pipeline-graph">
+                            <div class="graph-title"><span class="pulse-dot green"></span> Safety Gate Logic Pipeline</div>
+                            <div class="graph-nodes-container">
+                                <div class="node-step">
+                                    <div class="node-box scan">Finding Evaluated</div>
+                                </div>
+                                <div class="node-arrow">➔</div>
+                                <div class="node-step">
+                                    <div class="node-box context">Access Key Last Used Timestamp</div>
+                                </div>
+                                <div class="node-arrow">➔</div>
+                                <div class="node-branches">
+                                    <div class="branch-item block">
+                                        <div class="branch-badge block">BLOCK (Escalate)</div>
+                                        <div class="branch-cond">Active Key Used &lt; 90 Days Ago</div>
+                                        <div class="branch-reason">Active credential in use! Auto-deactivation would break live external API integration.</div>
+                                    </div>
+                                    <div class="branch-item proceed">
+                                        <div class="branch-badge proceed">PROCEED (Auto-Fix)</div>
+                                        <div class="branch-cond">Key Confirmed Dormant / Unused</div>
+                                        <div class="branch-reason">Unused key > 90 days. Safe to auto-deactivate key via IAM API.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <details class="code-drawer">
+                            <summary class="drawer-trigger">⚙️ View Boto3 Remediation API &amp; Context Signature</summary>
+                            <div class="drawer-code">
+<pre><code>iam_client.update_access_key(UserName=user_name, AccessKeyId=key_id, Status='Inactive')</code></pre>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+
+        <!-- ── VIEW 4: SETTINGS ────────────────────────────────────────────── -->
+        <div id="view-settings" class="page-view" style="display:none;">
+            <header class="topbar">
+                <div>
+                    <h1 class="page-title">Orchestrator Settings</h1>
+                    <p class="subtitle">Configure AI Reasoning Engine, AWS Profile, &amp; Autonomous Governance Parameters</p>
+                </div>
+            </header>
+
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:24px; max-width: 900px;">
+                <div class="stat-card" style="gap:16px;">
+                    <h3 style="color:#fff; font-size:1.1rem; border-bottom:1px solid var(--border-color); padding-bottom:8px;">☁️ AWS Connection</h3>
+                    <div>
+                        <label style="display:block; font-size:0.85rem; color:var(--text-secondary); margin-bottom:6px;">Target AWS Region</label>
+                        <input type="text" value="us-east-1" readonly style="width:100%; background:var(--bg-panel-hover); border:1px solid var(--border-color); color:#fff; padding:10px 14px; border-radius:8px; font-family:'Space Mono', monospace; font-size:0.9rem;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:0.85rem; color:var(--text-secondary); margin-bottom:6px;">Boto3 Profile</label>
+                        <input type="text" value="default (SDK environment)" readonly style="width:100%; background:var(--bg-panel-hover); border:1px solid var(--border-color); color:#fff; padding:10px 14px; border-radius:8px; font-size:0.9rem;">
+                    </div>
+                </div>
+
+                <div class="stat-card" style="gap:16px;">
+                    <h3 style="color:#fff; font-size:1.1rem; border-bottom:1px solid var(--border-color); padding-bottom:8px;">🧠 AI &amp; Risk Engine</h3>
+                    <div>
+                        <label style="display:block; font-size:0.85rem; color:var(--text-secondary); margin-bottom:6px;">LLM Provider</label>
+                        <input type="text" value="Gemini 3.6 Flash / Pro (Google DeepMind)" readonly style="width:100%; background:var(--bg-panel-hover); border:1px solid var(--border-color); color:#fff; padding:10px 14px; border-radius:8px; font-size:0.9rem;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size:0.85rem; color:var(--text-secondary); margin-bottom:6px;">Remediation Mode</label>
+                        <select style="width:100%; background:var(--bg-panel-hover); border:1px solid var(--border-color); color:#fff; padding:10px 14px; border-radius:8px; font-size:0.9rem;">
+                            <option value="LIVE">Live Autonomous AWS Remediation (Enforced)</option>
+                            <option value="DRYRUN">Dry Run / Simulation Mode</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stat-card" style="margin-top:24px; max-width:900px; gap:12px; background:rgba(59,130,246,0.06); border:1px solid rgba(59,130,246,0.3);">
+                <h4 style="color:var(--accent-primary);">🛡️ Safety Gate Guardrails</h4>
+                <p style="font-size:0.88rem; color:var(--text-secondary); line-height:1.5;">
+                    Safety Gate rules evaluate topological context (Subnet types, Route Tables, Attached Instances, Static Hosting status) before taking direct AWS API action. High and Critical risk findings bypass automated fixing and trigger LLM Root Cause Analysis for admin review.
+                </p>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Modal for RCA Details -->
+    <div class="modal-overlay" id="rcaModal" onclick="handleOverlayClick(event)">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h2>RCA &amp; Remediation Plan</h2>
+                    <p id="modalSubtitle" style="font-size:0.8rem; color: var(--text-secondary); margin-top:4px;"></p>
+                </div>
+                <button class="close-btn" onclick="closeModal()">×</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Inner content populated by JS -->
+            </div>
+            <div class="modal-footer" id="modalFooter">
+                <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Granting Exception -->
+    <div class="modal-overlay" id="grantExceptionModal" onclick="if(event.target===this) closeGrantExceptionModal()">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <div>
+                    <h2>🛡️ Grant Compliance Exception</h2>
+                    <p style="font-size:0.82rem; color: var(--text-secondary); margin-top:4px;">Exempt a cloud resource from a specific CIS control with time-bound governance</p>
+                </div>
+                <button class="close-btn" onclick="closeGrantExceptionModal()">×</button>
+            </div>
+            <form id="grantExceptionForm" onsubmit="submitGrantException(event)">
+                <div class="modal-body" style="display:flex; flex-direction:column; gap:16px;">
+                    <input type="hidden" id="excFindingId" value="">
+                    
+                    <div>
+                        <label style="display:block; font-size:0.82rem; color:var(--text-secondary); margin-bottom:6px; font-weight:600; text-transform:uppercase;">Target Resource ID *</label>
+                        <input type="text" id="excResourceId" required placeholder="e.g. sg-0170c84b16ee7dfad or arn:aws:s3:::my-bucket" style="width:100%; background:var(--bg-panel-hover); border:1px solid var(--border-color); color:#fff; padding:10px 14px; border-radius:8px; font-size:0.9rem; font-family:'Space Mono',monospace;">
+                    </div>
+
+                    <div>
+                        <label style="display:block; font-size:0.82rem; color:var(--text-secondary); margin-bottom:6px; font-weight:600; text-transform:uppercase;">Control ID *</label>
+                        <select id="excControlId" required style="width:100%; background:var(--bg-panel-hover); border:1px solid var(--border-color); color:#fff; padding:10px 14px; border-radius:8px; font-size:0.9rem;">
+                            <option value="CIS-5.2">CIS-5.2 — Security Group Unrestricted Port 22/3389 Access</option>
+                            <option value="CIS-5.3">CIS-5.3 — Security Group Ingress Wildcard (0.0.0.0/0)</option>
+                            <option value="CIS-2.1.4">CIS-2.1.4 — S3 Block Public Access (Account &amp; Bucket Level)</option>
+                            <option value="CIS-2.1.1">CIS-2.1.1 — S3 Bucket Server-Side Encryption</option>
+                            <option value="CIS-1.14">CIS-1.14 — IAM Access Keys 90-Day Rotation</option>
+                            <option value="CIS-1.16">CIS-1.16 — IAM Policies Full Administrative Privileges</option>
+                            <option value="CIS-2.2.1">CIS-2.2.1 — EBS Volume Default Encryption</option>
+                            <option value="CIS-2.3.1">CIS-2.3.1 — RDS Instance Public Accessibility</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label style="display:block; font-size:0.82rem; color:var(--text-secondary); margin-bottom:6px; font-weight:600; text-transform:uppercase;">Business Justification *</label>
+                        <textarea id="excJustification" required rows="3" placeholder="State operational justification (e.g. Legacy vendor VPN integration requiring direct ingress until Q4 migration)..." style="width:100%; background:var(--bg-panel-hover); border:1px solid var(--border-color); color:#fff; padding:10px 14px; border-radius:8px; font-size:0.9rem; resize:vertical;"></textarea>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                        <div>
+                            <label style="display:block; font-size:0.82rem; color:var(--text-secondary); margin-bottom:6px; font-weight:600; text-transform:uppercase;">Business Owner</label>
+                            <input type="text" id="excOwner" value="devops-lead@company.com" style="width:100%; background:var(--bg-panel-hover); border:1px solid var(--border-color); color:#fff; padding:10px 14px; border-radius:8px; font-size:0.9rem;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:0.82rem; color:var(--text-secondary); margin-bottom:6px; font-weight:600; text-transform:uppercase;">Approved By</label>
+                            <input type="text" id="excApprover" value="ciso@company.com" style="width:100%; background:var(--bg-panel-hover); border:1px solid var(--border-color); color:#fff; padding:10px 14px; border-radius:8px; font-size:0.9rem;">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label style="display:block; font-size:0.82rem; color:var(--text-secondary); margin-bottom:6px; font-weight:600; text-transform:uppercase;">Duration (Time-Bound Expiry)</label>
+                        <div style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
+                            <button type="button" class="duration-chip" onclick="setExcDuration(7, this)">7 Days</button>
+                            <button type="button" class="duration-chip" onclick="setExcDuration(15, this)">15 Days</button>
+                            <button type="button" class="duration-chip active" onclick="setExcDuration(30, this)">30 Days</button>
+                            <button type="button" class="duration-chip" onclick="setExcDuration(90, this)">90 Days</button>
+                        </div>
+                        <input type="number" id="excDays" min="1" max="365" value="30" style="width:120px; background:var(--bg-panel-hover); border:1px solid var(--border-color); color:#fff; padding:8px 12px; border-radius:8px; font-size:0.9rem;"> <span style="font-size:0.85rem; color:var(--text-secondary);">days from today</span>
+                    </div>
+                </div>
+                <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:10px;">
+                    <button type="button" class="btn btn-secondary" onclick="closeGrantExceptionModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="excSubmitBtn">🛡️ Confirm &amp; Grant Exception</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>

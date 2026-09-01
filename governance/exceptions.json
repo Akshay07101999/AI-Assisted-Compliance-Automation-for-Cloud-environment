@@ -1,0 +1,34 @@
+[
+  {
+    "_comment": "EXAMPLE \u00e2\u20ac\u201d Replace with real approved exceptions. Delete this entry before production.",
+    "resource_id": "arn:aws:s3:::example-dev-marketing-site",
+    "control_id": "CIS-2.1.4",
+    "justification": "Public marketing website serving static HTML mockups for UX review",
+    "business_owner": "john.doe@company.com",
+    "approved_by": "ciso@company.com",
+    "approved_date": "2026-07-01",
+    "expiry_date": "2026-10-01"
+  },
+  {
+    "exception_id": "EXC-20260822-002",
+    "resource_id": "test-sg-dashboard-demo",
+    "control_id": "CIS-5.2",
+    "justification": "Testing dashboard exception management integration",
+    "business_owner": "admin@demo.com",
+    "approved_by": "ciso@demo.com",
+    "approved_date": "2026-08-22",
+    "expiry_date": "2026-09-05",
+    "status": "revoked"
+  },
+  {
+    "exception_id": "EXC-20260822-003",
+    "resource_id": "amzn-demo-fortest",
+    "control_id": "CIS-2.1.4",
+    "justification": "Need to test a new feature ahead of production release",
+    "business_owner": "devops-lead@company.com",
+    "approved_by": "ciso@company.com",
+    "approved_date": "2026-08-22",
+    "expiry_date": "2026-08-29",
+    "status": "active"
+  }
+]

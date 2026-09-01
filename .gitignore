@@ -1,0 +1,86 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Testing & coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets & credentials (NEVER commit these)
+*.env
+.env
+.env.*
+credentials
+aws_credentials
+*.pem
+*.key
+*.p12
+config/secrets*
+
+# Large output files
+*.log
+s3_out.txt
+scan_report.json
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Temp / scratch
+scratch/
+tmp/
+
+# Database files (auto-generated at runtime)
+*.db
+
+# Dev/inject/scratch scripts — removed from repo, kept locally only
+inject_test_traffic.py
+inject_ips.py
+provision_demo_scenarios.py
+create_test_scenarios.py
+create_test_scenarios_p2.py
+create_test_scenarios_p3.py
+wipe_all_test_resources.py
+setup_ec2_test_sg.py
+scratch_external_ping.py
+scratch_rds_ping.py
+capture_fig9_2.py
+show_context_output.py
+report_viewer.py
+run_validations.py
+update_lambda_unified.py
+test_e2e_flow_log.py
+test_flow_log_remediation.py
+test_lambda_invoke.py
+test_logic_audit.py
+test_sg_comprehensive.py
+updated_capstone_report.md
+replacements.txt
+test_rollback.py
+governance/migrate_to_db.py
+
